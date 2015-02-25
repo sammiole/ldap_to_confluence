@@ -1,0 +1,76 @@
+<!DOCTYPE etl SYSTEM "http://scriptella.javaforge.com/dtd/etl.dtd">
+<etl>
+	
+	<!-- LDAP properties file reference -->
+	<properties>
+		<include href="ldap.properties"/>
+	</properties>
+	
+	<!-- LDAP Connection Setup -->
+	<connection id="ldap" driver="${ldap.driver}" url="${ldap.url}" user="${ldap.user}" password="${ldap.password}">
+		search.basedn=dc=ec,dc=auckland,dc=ac,dc=nz
+		search.scope=subtree
+	</connection>
+	
+	<!-- Groovy Connection Setup -->
+	<connection id="groovy" driver="script">language=groovy</connection>
+	
+	<!-- Defining global variables -->
+	<script connection-id="groovy">
+		def usersMap = [:]
+		etl.globals.put('usersMap', usersMap)
+	</script>
+	
+	<query connection-id="ldap">
+		<!-- LDAP query - the group you want to add/edit to Confluence -->
+		<![CDATA[(groupMembership=cn=app-engineering.its,ou=ec_group,dc=ec,dc=auckland,dc=ac,dc=nz)]]>   
+		      
+		<script connection-id="groovy">
+			<!-- Storing displayName (value) and email (value) to each id (key) -->
+			def map = etl.globals.get('usersMap')
+			map[cn]=[(mail), (displayName)]
+		</script>
+	</query>
+	
+	<!-- Accessing SOAP operations with Groovy -->
+	<script connection-id="groovy">      		
+		// Grabbing dependencies
+	   	@Grab(group='ch.qos.logback', module='logback-classic', version='1.1.2')
+		@GrabResolver(name='thirdparty',root='https://nexus.auckland.ac.nz/nexus/content/repositories/thirdparty/')
+		@Grab(group='org.swift.common', module='confluence-soap', version='5.6.4')
+		
+		import org.swift.common.soap.confluence.ConfluenceSoapServiceServiceLocator
+		import org.swift.common.soap.confluence.RemoteUser
+		import org.slf4j.Logger
+		import org.slf4j.LoggerFactory
+		
+		// Logger for testing 
+		Logger logger = LoggerFactory.getLogger("ldap_to_confluence")
+		
+		// Credentials for Confluence Soap WSDL
+		def username= "username"
+		def password = "password"
+		def url = "https://wiki.test.auckland.ac.nz/rpc/soap-axis/confluenceservice-v2?wsdl"     
+
+		// Create a SOAP session to access operations 
+		def serviceLocator = new ConfluenceSoapServiceServiceLocator()
+		serviceLocator.setConfluenceserviceV2EndpointAddress(url)
+		serviceLocator.setMaintainSession(true)
+		def service = serviceLocator.getConfluenceserviceV2()
+		def token = service.login(username, password)
+	
+		// Loop through all the users (key) in usersMap found in LDAP,
+		// check if the user exists.  If the user doesn't exist, add the user 
+		// to Confluence Wiki. If exists, edit (update) existing user details.
+		etl.globals.get('usersMap').each{ key ,value -> 
+			// Create RemoteUser with each loop through userMap
+			// Format: RemoteUser(String email, String fullname, String name, String url)
+			def currUser = new RemoteUser(value[0], value[1],key, "")
+			if (service.hasUser(token, key)){
+				service.editUser(token, currUser)
+			} else {
+				service.addUser(token, currUser)
+			}
+		}
+	</script>
+</etl>
