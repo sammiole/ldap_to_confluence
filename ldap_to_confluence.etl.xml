@@ -35,7 +35,7 @@
 	<!-- Accessing SOAP operations with Groovy -->
 	<script connection-id="groovy">      		
 		// Grabbing dependencies
-	   	@Grab(group='ch.qos.logback', module='logback-classic', version='1.1.2')
+		@Grab(group='ch.qos.logback', module='logback-classic', version='1.1.2')
 		@GrabResolver(name='thirdparty',root='https://nexus.auckland.ac.nz/nexus/content/repositories/thirdparty/')
 		@Grab(group='org.swift.common', module='confluence-soap', version='5.6.4')
 		
@@ -47,17 +47,23 @@
 		// Logger for testing 
 		Logger logger = LoggerFactory.getLogger("ldap_to_confluence")
 		
+		// Setting up confluence properties file
+		String confluenceProperties = "properties.groovy"
+		def config = new ConfigSlurper("development").parse(new File(confluenceProperties).toURL())
+		
 		// Credentials for Confluence Soap WSDL
-		def username= "username"
-		def password = "password"
-		def url = "https://wiki.test.auckland.ac.nz/rpc/soap-axis/confluenceservice-v2?wsdl"     
-
+		def username = config.properties.username
+		def password = config.properties.password
+		def url = config.properties.url
+		
 		// Create a SOAP session to access operations 
 		def serviceLocator = new ConfluenceSoapServiceServiceLocator()
 		serviceLocator.setConfluenceserviceV2EndpointAddress(url)
 		serviceLocator.setMaintainSession(true)
 		def service = serviceLocator.getConfluenceserviceV2()
 		def token = service.login(username, password)
+		
+		try {
 	
 		// Loop through all the users (key) in usersMap found in LDAP,
 		// check if the user exists.  If the user doesn't exist, add the user 
@@ -66,11 +72,19 @@
 			// Create RemoteUser with each loop through userMap
 			// Format: RemoteUser(String email, String fullname, String name, String url)
 			def currUser = new RemoteUser(value[0], value[1],key, "")
+			logger.debug("New user created")
 			if (service.hasUser(token, key)){
 				service.editUser(token, currUser)
-			} else {
-				service.addUser(token, currUser)
+				logger.debug("User edited")
+				} else {
+					service.addUser(token, currUser)
+					logger.debug("User added")
+				}
 			}
-		}
+			} catch (Exception e){
+				logger.error("Error while looping through usersMap found in LDAP and adding/editing users")
+				throw e
+				
+			}
 	</script>
 </etl>
