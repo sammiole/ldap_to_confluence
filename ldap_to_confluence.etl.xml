@@ -64,27 +64,25 @@
 		def token = service.login(username, password)
 		
 		try {
-	
-		// Loop through all the users (key) in usersMap found in LDAP,
-		// check if the user exists.  If the user doesn't exist, add the user 
-		// to Confluence Wiki. If exists, edit (update) existing user details.
-		etl.globals.get('usersMap').each{ key ,value -> 
-			// Create RemoteUser with each loop through userMap
-			// Format: RemoteUser(String email, String fullname, String name, String url)
-			def currUser = new RemoteUser(value[0], value[1],key, "")
-			logger.debug("New user created")
-			if (service.hasUser(token, key)){
-				service.editUser(token, currUser)
-				logger.debug("User edited")
+			// Loop through all the users (key) in usersMap found in LDAP,
+			// check if the user exists.  If the user doesn't exist, add the user 
+			// to Confluence Wiki. If exists, edit (update) existing user details.
+			etl.globals.get('usersMap').each{ key ,value -> 
+				// Create RemoteUser with each loop through userMap
+				// Format: RemoteUser(String email, String fullname, String name, String url)
+				def currUser = new RemoteUser(value[0], value[1],key, "")
+				logger.debug("New user created")
+				if (service.hasUser(token, key)){
+					service.editUser(token, currUser)
+					logger.debug("User edited")
 				} else {
 					service.addUser(token, currUser)
 					logger.debug("User added")
 				}
 			}
-			} catch (Exception e){
-				logger.error("Error while looping through usersMap found in LDAP and adding/editing users")
-				throw e
-				
-			}
+		} catch (Exception e){
+			logger.error("Error while looping through usersMap found in LDAP and adding/editing users")
+			throw e
+		}
 	</script>
 </etl>
